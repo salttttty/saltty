@@ -1,0 +1,283 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>메모리 게임</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      text-align: center;
+      background: #f0f8ff;
+      margin: 0;
+      padding: 20px;
+      user-select: none;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #score {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+    .game-board {
+      width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-gap: 8px;
+    }
+    .card {
+      background: #4caf50;
+      border-radius: 8px;
+      cursor: pointer;
+      height: 80px;
+      position: relative;
+      perspective: 600px;
+    }
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.5s;
+      transform-style: preserve-3d;
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+      cursor: default;
+    }
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 40px;
+      user-select: none;
+    }
+    .card-front {
+      background: white;
+      border: 2px solid #4caf50;
+      transform: rotateY(180deg);
+    }
+    .card-back {
+      background: #4caf50;
+      color: white;
+      font-weight: bold;
+    }
+    canvas#fireworks {
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <h1>메모리 게임 - 과일 맞추기</h1>
+  <div id="score">점수: 0</div>
+  <div id="game-board" class="game-board"></div>
+  <canvas id="fireworks"></canvas>
+
+
+  <script>
+    const fruits = [
+      '🍎','🍌','🍇','🍉','🍓','🍒','🥝','🍍','🥭','🍑',
+      '🍋','🥥','🍈','🍐','🍏','🍊','🍅','🍆','🥑','🥕',
+      '🌽','🍠','🍄','🥔','🥒'
+    ]; // 25가지 과일 아이콘
+
+
+    const gameBoard = document.getElementById('game-board');
+    const scoreEl = document.getElementById('score');
+    const fireworksCanvas = document.getElementById('fireworks');
+    const ctx = fireworksCanvas.getContext('2d');
+
+
+    let score = 0;
+    let flippedCards = [];
+    let matchedCount = 0;
+    let lockBoard = false;
+
+
+    // 카드 2개씩 중복 배열 만들고 섞기
+    let cardFruits = fruits.concat(fruits);
+    shuffle(cardFruits);
+
+
+    function shuffle(array) {
+      for(let i = array.length -1; i>0; i--){
+        let j = Math.floor(Math.random()*(i+1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+
+    function createCard(fruit, index){
+      const card = document.createElement('div');
+      card.classList.add('card');
+      card.dataset.fruit = fruit;
+      card.dataset.index = index;
+
+
+      const cardInner = document.createElement('div');
+      cardInner.classList.add('card-inner');
+
+
+      const cardFront = document.createElement('div');
+      cardFront.classList.add('card-front');
+      cardFront.textContent = fruit;
+
+
+      const cardBack = document.createElement('div');
+      cardBack.classList.add('card-back');
+      cardBack.textContent = '🍏';
+
+
+      cardInner.appendChild(cardFront);
+      cardInner.appendChild(cardBack);
+      card.appendChild(cardInner);
+
+
+      card.addEventListener('click', () => onCardClick(card));
+      return card;
+    }
+
+
+    function onCardClick(card){
+      if(lockBoard) return;
+      if(card.classList.contains('flipped')) return;
+
+
+      card.classList.add('flipped');
+      flippedCards.push(card);
+
+
+      if(flippedCards.length === 2){
+        checkMatch();
+      }
+    }
+
+
+    function checkMatch(){
+      lockBoard = true;
+      const [card1, card2] = flippedCards;
+
+
+      if(card1.dataset.fruit === card2.dataset.fruit){
+        // 맞춤
+        score += 10;
+        matchedCount += 2;
+        scoreEl.textContent = `점수: ${score}`;
+        flippedCards = [];
+        lockBoard = false;
+
+
+        if(matchedCount === cardFruits.length){
+          startFireworks();
+        }
+      } else {
+        // 틀림
+        setTimeout(() => {
+          card1.classList.remove('flipped');
+          card2.classList.remove('flipped');
+          flippedCards = [];
+          lockBoard = false;
+        }, 1000);
+      }
+    }
+
+
+    // 카드판 생성
+    function initGame(){
+      gameBoard.innerHTML = '';
+      cardFruits.forEach((fruit, i) => {
+        gameBoard.appendChild(createCard(fruit, i));
+      });
+    }
+
+
+    initGame();
+
+
+    // --- 폭죽 효과 (간단한 캔버스 애니메이션) ---
+    fireworksCanvas.width = window.innerWidth;
+    fireworksCanvas.height = window.innerHeight;
+
+
+    class FireworkParticle {
+      constructor(x, y, color){
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.radius = 3;
+        this.speedX = (Math.random() - 0.5) * 8;
+        this.speedY = (Math.random() - 0.5) * 8;
+        this.alpha = 1;
+        this.decay = Math.random() * 0.02 + 0.01;
+      }
+      update(){
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.alpha -= this.decay;
+        if(this.alpha < 0) this.alpha = 0;
+      }
+      draw(ctx){
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+
+    let particles = [];
+    let animationId = null;
+
+
+    function startFireworks(){
+      const colors = ['#ff0000','#ff8800','#ffff00','#00ff00','#00ffff','#0000ff','#ff00ff'];
+      for(let i=0; i<100; i++){
+        let x = window.innerWidth/2 + (Math.random() - 0.5) * 200;
+        let y = window.innerHeight/2 + (Math.random() - 0.5) * 200;
+        let color = colors[Math.floor(Math.random()*colors.length)];
+        particles.push(new FireworkParticle(x, y, color));
+      }
+      animateFireworks();
+    }
+
+
+    function animateFireworks(){
+      ctx.clearRect(0, 0, fireworksCanvas.width, fireworksCanvas.height);
+      particles.forEach((p, i) => {
+        p.update();
+        p.draw(ctx);
+        if(p.alpha <= 0){
+          particles.splice(i, 1);
+        }
+      });
+      if(particles.length > 0){
+        animationId = requestAnimationFrame(animateFireworks);
+      } else {
+        cancelAnimationFrame(animationId);
+      }
+    }
+
+
+    // 화면 크기 변경 시 캔버스 크기 조절
+    window.addEventListener('resize', () => {
+      fireworksCanvas.width = window.innerWidth;
+      fireworksCanvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
